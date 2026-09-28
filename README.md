@@ -41,7 +41,13 @@
 
 <!-- Three or four sentences: what a user asks for, and what they get back. -->
 
-
+A user asks for a thrifted item in plain language, e.g. "vintage graphic tee
+under $30", optionally with a size and a price ceiling. FitFindr searches the
+mock listings for the best match, suggests one or two outfits built from that
+item and whatever's in the user's wardrobe (or general styling advice if their
+wardrobe is empty), and writes a short social-post-style caption for the find.
+If nothing in the listings matches, the agent says so and stops instead of
+inventing an item.
 
 ---
 
@@ -59,24 +65,45 @@
 
 ### `search_listings`
 
-- **What it does:**
-- **Inputs:** <!-- name and type each: `max_price` (float), not "a price" -->
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Filters the mock listings by size and price, then scores
+  the rest by keyword overlap with the description and returns the best matches,
+  best match first. Doesn't call the model.
+- **Inputs:** `description` (str) — keywords describing the item, e.g. "vintage
+  graphic tee"; `size` (str or None) — matched case-insensitively against
+  whole size tokens, not a raw substring, so `"M"` matches `"S/M"` but not
+  `"US 9"`; `max_price` (float or None) — inclusive price ceiling.
+- **Returns:** A list of listing dicts, each with `id`, `title`, `description`,
+  `category`, `style_tags`, `size`, `condition`, `price`, `colors`, `brand`
+  (may be `None`), and `platform`. Sorted by keyword-match score, capped at
+  `config.SEARCH_RESULT_LIMIT`.
+- **When it has nothing:** Returns `[]` — an empty list, never `None` and
+  never an exception. `agent.py::run_agent` branches on this.
 
 ### `suggest_outfit`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Calls the model to suggest one or two outfits that pair the
+  found item with pieces from the user's wardrobe, naming specific items the
+  user already owns.
+- **Inputs:** `new_item` (dict) — the selected listing dict from
+  `search_listings`; `wardrobe` (dict) — a wardrobe dict with an `items` key
+  holding a list of wardrobe-item dicts (`id`, `name`, `category`, `colors`,
+  `style_tags`, `notes`); `items` may be an empty list.
+- **Returns:** A non-empty string with the outfit suggestion(s).
+- **When it has nothing:** If `wardrobe['items']` is empty, returns general
+  styling advice for the item instead of naming owned pieces — never raises
+  and never returns `""`.
 
 ### `create_fit_card`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Calls the model to write a short, social-post-style
+  caption for the find, mentioning the item, its price, and its platform once
+  each, and specific about the vibe — not a product description.
+- **Inputs:** `outfit` (str) — the outfit-suggestion string from
+  `suggest_outfit`; `new_item` (dict) — the listing dict for the item.
+- **Returns:** A two-to-four sentence caption string, worded differently on
+  each call (see `TEMPERATURE`/`CACHE_ENABLED` in `config.py` if it isn't).
+- **When it has nothing:** If `outfit` is empty or whitespace-only, returns a
+  descriptive fallback message instead of raising.
 
 ---
 
