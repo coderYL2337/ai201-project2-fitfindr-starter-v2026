@@ -25,9 +25,11 @@ Given a query that matches at least one listing, the agent completes all three
 tool calls and returns a fit card — in at least 4 of 5 tries.
 
 **Why this target:**
-<!-- Why 4 of 5 and not 5 of 5? Something about your search, probably —
-     "my search is a plain keyword match and some phrasings will miss" is a
-     real answer. -->
+
+`search_listings` scores by plain keyword overlap against listing text, not a
+semantic match, so a phrasing that shares no words with the listing's title or
+description can miss an item that's actually in the data. 4 of 5 leaves room
+for that one phrasing mismatch without excusing a search that misses often.
 
 ---
 
@@ -37,8 +39,12 @@ Given a query that matches no listings, the agent stops before calling
 `suggest_outfit` and returns a message naming what to change — 5 of 5 tries.
 
 **Why this target:**
-<!-- Why is 5 of 5 reasonable here when criterion 1 isn't? What's different
-     about this path? -->
+
+This path doesn't depend on keyword phrasing lining up with real data — it only
+requires that nothing scores above zero, which a query for an item that isn't
+in the listings at all (e.g. "designer ballgown size XXS under $5") guarantees
+every time. There's no fuzziness here the way there is in criterion 1, so it
+should hold on every try.
 
 ---
 
@@ -54,11 +60,16 @@ Given a query that matches no listings, the agent stops before calling
      compares session["selected_item"] against what actually reached
      suggest_outfit is the shape you're after. -->
 
-
+Across 5 different matching queries, the `id` of `session["selected_item"]`
+matches the `id` of the item dict actually received by `suggest_outfit` and by
+`create_fit_card` — 5 of 5 tries.
 
 **Why this target:**
 
-
+This is a plumbing check, not a model check — passing the same dict reference
+along the session is deterministic code, not something the model's wording can
+affect. If this ever fails, the bug is in `run_agent`'s wiring rather than in
+any one tool, so there's no reason to expect it to vary between tries.
 
 ---
 
@@ -75,13 +86,16 @@ Given a query that matches no listings, the agent stops before calling
      sentence? A card longer than a caption anyone would post? Any of those can
      be turned into a number. -->
 
-
+For 5 different items, every fit card mentions the item's price and platform
+at least once each and is 2 to 4 sentences long — 5 of 5 tries.
 
 **Why this target:**
 
-
-
----
+The model can vary its wording freely, and that's expected — but a caption
+that drops the price or platform, or sprawls into a paragraph, has stopped
+doing what a fit card is for. Those are things I can count regardless of which
+words the model happens to pick, so 5 of 5 is fair even though the exact
+sentences aren't.
 
 ## 5. Your choice
 
@@ -92,9 +106,18 @@ Given a query that matches no listings, the agent stops before calling
      search respects a price ceiling — anything, as long as it names a number
      or an observable outcome. -->
 
-
+Run with `--empty-wardrobe`, `suggest_outfit` returns non-empty general
+styling advice for the item — never an empty string, never an exception, and
+never a sentence naming a specific wardrobe item that doesn't exist — 5 of 5
+tries.
 
 **Why this target:**
+
+The empty wardrobe is one of unit 4's three named failure modes, and it's the
+kind most likely to fail silently — the model inventing a piece the user
+doesn't own — rather than loudly, with an error. That's worth locking down
+now, while it's cheap to check, rather than discovering it as a bad diagnosis
+later.
 
 
 
