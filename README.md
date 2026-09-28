@@ -183,15 +183,28 @@ Found my holy grail denim today and I'm honestly not shutting up about it. These
 
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I asked Copilot to implement `search_listings`'s size
+  filter, following the warning already in the `tools.py` docstring that a
+  plain substring test is wrong — `"s" in "us 9"` is `True`, and so is
+  `"l" in "xl"`.
+- *What came back:* A token-based matcher — `_size_tokens()` splits a size
+  string on non-alphanumeric characters (`"S/M"` → `{"s", "m"}`) and checks
+  for set overlap instead of substring containment.
+- *What I changed:* Nothing in the logic, but I didn't trust it until I ran
+  it — `search_listings('graphic tee', max_price=30)` came back only with
+  tops sized `S/M` or `L`, no shoe listings sized `US 9` slipping in on a
+  stray `"s"`. I kept it once the terminal test confirmed it.
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I asked for the empty-search branch in `run_agent` —
+  stop before `suggest_outfit` when `search_listings` returns nothing.
+- *What came back:* A first draft that set `session["error"] = "No results."`
+- *What I changed:* The `run_agent` docstring itself says `"No results"` is
+  not an acceptable message, so I rewrote it to name what the user could
+  actually do: *"No listings matched. Try a higher price ceiling, a different
+  size, or fewer keywords in the description."* I confirmed the fix by running
+  the ballgown query and reading the message back.
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
