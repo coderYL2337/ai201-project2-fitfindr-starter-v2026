@@ -13,10 +13,39 @@ Build and test your three tools in `tools.py` first. Then come here.
     python agent.py          runs both example paths below
 """
 
+import re
+
 import config
 import trace
 from tools import search_listings, suggest_outfit, create_fit_card
 from generate import ModelUnavailable
+
+
+# ── query parsing ─────────────────────────────────────────────────────────────
+
+_PRICE_RE = re.compile(r"under\s*\$?\s*(\d+(?:\.\d+)?)", re.I)
+_SIZE_RE = re.compile(r"\bsize\s+([a-zA-Z0-9/]+)", re.I)
+
+
+def _parse_query(query: str) -> dict:
+    """Regex — pull a price ceiling and a size out of the query, whatever's
+    left becomes the free-text description."""
+    remainder = query
+    max_price = None
+    size = None
+
+    price_match = _PRICE_RE.search(remainder)
+    if price_match:
+        max_price = float(price_match.group(1))
+        remainder = remainder[: price_match.start()] + remainder[price_match.end():]
+
+    size_match = _SIZE_RE.search(remainder)
+    if size_match:
+        size = size_match.group(1)
+        remainder = remainder[: size_match.start()] + remainder[size_match.end():]
+
+    description = re.sub(r"\s+", " ", remainder).strip(" ,.")
+    return {"description": description, "size": size, "max_price": max_price}
 
 
 # ── session state ─────────────────────────────────────────────────────────────
@@ -106,9 +135,30 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         than a stack trace. The import is already at the top of this file.
     """
     session = new_session(query, wardrobe)
+    trace.check_iterations(1)
 
-    # TODO: delete these two lines and build the loop.
-    session["error"] = "The planning loop isn't built yet — see the TODO in agent.py."
+    session["parsed"] = _parse_query(query)
+
+    results = search_listings(
+        session["parsed"]["description"],
+        size=session["parsed"]["size"],
+        max_price=session["parsed"]["max_price"],
+    )
+    session["search_results"] = results
+
+    # THE BRANCH: nothing matched, stop before suggest_outfit / create_fit_card.
+    if not results:
+        session["error"] = (
+            "No listings matched. Try a higher price ceiling, a different "
+            "size, or fewer keywords in the description."
+        )
+        return session
+
+    session["selected_item"] = results[0]
+    session["outfit_suggestion"] = suggest_outfit(session["selected_item"], wardrobe)
+    session["fit_card"] = create_fit_card(
+        session["outfit_suggestion"], session["selected_item"]
+    )
     return session
 
 
