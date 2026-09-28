@@ -120,13 +120,22 @@ inventing an item.
      The grader checks your code against what you claim here, so the file and
      function have to be real. -->
 
-**Branch rule:**
+**Branch rule:** If `search_listings` returns an empty list, put a message in
+`session["error"]` naming what the user could change (loosen the price or size)
+and return the session without calling `suggest_outfit` or `create_fit_card`.
+Otherwise, take the first result as `session["selected_item"]` and continue on
+to `suggest_outfit` and then `create_fit_card`.
 
 **Where it lives:** `agent.py::run_agent`
 
-**How the query is parsed:** <!-- regex, string splitting, or asking the model — say which -->
+**How the query is parsed:** Regex — pulling a price ceiling out of patterns
+like "under $30" and a size token like "size M", with whatever's left of the
+query used as the free-text description.
 
-**What moves through the session:** <!-- which fields, in what order -->
+**What moves through the session:** `query` → `parsed` (description, size,
+max_price) → `search_results` → `selected_item` → `outfit_suggestion` →
+`fit_card`, with `error` set (and everything after it left `None`) if the loop
+stops early.
 
 ---
 
