@@ -313,10 +313,7 @@ python app.py ask 'designer ballgown size XXS under $5' --trace
       →    empty search results, stopping before suggest_outfit
 ```
 
-**On the MCP move:** <!-- what changed in your code, and whether anything
-behaved differently afterwards. If the rewire didn't work, say exactly where it
-broke — the error text and the last thing that worked. That earns the point in
-full. -->
+**On the MCP move:** In `run_agent()`, the direct call `search_listings(description, size=..., max_price=...)` was replaced with `call_tool("search_listings", {"description": ..., "size": ..., "max_price": ...})` (old line kept commented out above the new one for comparison). The call site changed shape — positional/keyword args became one dict, and the call now goes through a subprocess over stdio instead of an in-process function call — but the return value didn't: `search_listings` still comes back as a list of dicts with the same keys (`title`, `price`, `platform`, etc.), confirmed by the trace output above and by `_show()`/`_ask_one()` printing identical fields before and after the swap. No behavioral difference showed up, which suggests the tool was already returning plain JSON-safe data (no custom objects, no non-string keys) even before MCP was in the picture.
 
 
 
