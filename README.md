@@ -226,17 +226,32 @@ Found my holy grail denim today and I'm honestly not shutting up about it. These
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. Matching query completes all three tools | 4 of 5 | PASS | FAIL (crashed) | PASS | PASS | PASS | MET (4/5) |
+| 2. Impossible query stops before second tool | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. `selected_item` id matches item passed to `suggest_outfit`/`create_fit_card` (5 different queries: track jacket, slip dress, sneakers, denim jacket, graphic tee) | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. Fit card mentions price + platform, 2–4 sentences (5 different items: track jacket, slip dress, sneakers, denim jacket, graphic tee) | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 5. Empty wardrobe returns non-empty advice, no crash, no invented item | 5 of 5 | FAIL (crashed) | PASS | FAIL (crashed) | FAIL (crashed) | PASS | MISSED (2/5) |
+
+> Source: `results/run_2026-10-05_0210_before.md`, produced by `run_eval.py::main`
+> (5 tries per scenario, caching off). For criteria 3 and 4, each "Try" column
+> is a different scenario/query, not 5 repeats of one query, since those
+> criteria require 5 different items.
 
 **Real output from one try**, pasted as text, naming the file and function
 that produced it:
 
 ```
+agent.py::run_agent → tools.py::suggest_outfit / tools.py::create_fit_card
+scenario: "matching query completes", query "vintage graphic tee under $30", try 1
 
+Outfit suggestion:
+You should definitely grab it! Pair the baby tee with your baggy straight-leg jeans and chunky white sneakers for a classic, nostalgic Y2K streetwear look. Toss your black cropped zip hoodie over the top on cooler days to nail that effortless early-2000s vibe.
+
+Fit card:
+Found this literal dream of a butterfly print Y2K baby tee while digging through the racks, and I'm obsessed. It's giving major early-2000s mall rat energy, and I honestly can't wait to style it with some baggy denim and chunky sneakers. Snagged it on Depop for just $18.0 and I'm never taking it off.
+
+Try 2 crash (generate.py raising ModelUnavailable):
+ModelUnavailable: Couldn't reach the model: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}
 ```
 
 ---
