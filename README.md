@@ -288,13 +288,29 @@ that produced it:
 **Happy path**
 
 ```
+python app.py ask 'vintage graphic tee under $30, size M' --trace
 
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 8 items: Y2K Baby Tee — Butterfly Print, Mesh Long-Sleeve Top — Black, 90s Silk Slip Dress — Floral, Midi Length … +5 more
+[2] suggest_outfit
+      in:  dict with keys: selected_item, wardrobe
+      out: Definitely buy it! Pair the Y2K baby tee with your baggy straight-leg jeans and chunky white sneakers for an e…
+[3] create_fit_card
+      in:  dict with keys: outfit, item
+      out: Absolute peak 2000s energy right here. Just snagged this Y2K baby tee on Depop for $18.0 and I'm totally obses…
 ```
 
 **Empty search**
 
 ```
+python app.py ask 'designer ballgown size XXS under $5' --trace
 
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: [] (empty)
+[2] branch
+      →    empty search results, stopping before suggest_outfit
 ```
 
 **On the MCP move:** <!-- what changed in your code, and whether anything

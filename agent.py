@@ -146,12 +146,14 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     #     size=session["parsed"]["size"],
     #     max_price=session["parsed"]["max_price"],
     # )
-    results = call_tool("search_listings", {
+    search_inputs = {
         "description": session["parsed"]["description"],
         "size": session["parsed"]["size"],
         "max_price": session["parsed"]["max_price"],
-    })
+    }
+    results = call_tool("search_listings", search_inputs)
     session["search_results"] = results
+    trace.step("search_listings (via MCP)", inputs=search_inputs, returned=results)
 
     # THE BRANCH: nothing matched, stop before suggest_outfit / create_fit_card.
     if not results:
@@ -159,12 +161,25 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             "No listings matched. Try a higher price ceiling, a different "
             "size, or fewer keywords in the description."
         )
+        trace.step("branch", note="empty search results, stopping before suggest_outfit")
         return session
 
     session["selected_item"] = results[0]
+
     session["outfit_suggestion"] = suggest_outfit(session["selected_item"], wardrobe)
+    trace.step(
+        "suggest_outfit",
+        inputs={"selected_item": session["selected_item"], "wardrobe": wardrobe},
+        returned=session["outfit_suggestion"],
+    )
+
     session["fit_card"] = create_fit_card(
         session["outfit_suggestion"], session["selected_item"]
+    )
+    trace.step(
+        "create_fit_card",
+        inputs={"outfit": session["outfit_suggestion"], "item": session["selected_item"]},
+        returned=session["fit_card"],
     )
     return session
 
