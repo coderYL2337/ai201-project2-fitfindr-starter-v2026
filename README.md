@@ -276,13 +276,15 @@ ModelUnavailable: Couldn't reach the model: 503 UNAVAILABLE. {'error': {'code': 
 
 | # | Criterion | Target | Verdict | How I decided |
 |---|---|---|---|---|
-| 1 |  |  |  |  |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
-| 4 |  |  |  |  |
-| 5 |  |  |  |  |
+| 1 | Matching query completes all three tools | 4 of 5 | MET (4/5) | Counted PASS where the session reached `create_fit_card` with no crash; 1 try raised `ModelUnavailable` (503), leaving 4 completed. |
+| 2 | Impossible query stops before second tool | 5 of 5 | MET (5/5) | All 5 tries stopped at the branch with `session["error"]` set and `fit_card` still `None`, confirmed in the trace. |
+| 3 | `selected_item` id matches item passed downstream (5 different queries) | 5 of 5 | MET (5/5) | For each of the 5 different-item scenarios, compared the title/price/platform in `session["selected_item"]` against what appears in the generated outfit/fit card text — identical every time. |
+| 4 | Fit card mentions price + platform, 2–4 sentences (5 different items) | 5 of 5 | MET (5/5) | Checked one completed try per item: every fit card named the dollar amount and the platform, and sentence counts landed at 3 each. |
+| 5 | Empty wardrobe returns non-empty advice, no crash, no invented item | 5 of 5 | MISSED (2/5) | 3 of 5 tries raised `ModelUnavailable` before `suggest_outfit` could return anything — counted as failures since the criterion explicitly rules out exceptions. |
 
 **Diagnoses**
+
+Criterion 5 missed because of one mechanism, not five unrelated bad tries: `agent.py::run_agent` never catches `ModelUnavailable`. When `tools.py::suggest_outfit` or `tools.py::create_fit_card` calls the model in `generate.py` and the service returns a 503, the exception propagates straight out of `run_agent` uncaught. `run_eval.py::run_once` happens to catch it generically and logs "crashed", but in the real CLI path (`app.py::_ask_one`) nothing would turn that into the readable message the brief asks for — it would surface as a raw stack trace instead. The same mechanism also caused criterion 1's single miss (try 2's crash) and would affect criterion 3/4 equally if their underlying scenario's one verified try had hit the same error. This is a loop problem, not a tool problem: `suggest_outfit`/`create_fit_card` are working as designed, and `ModelUnavailable` is already defined for exactly this case — `run_agent` just never handles it.
 
 
 
