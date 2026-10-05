@@ -166,21 +166,27 @@ def run_agent(query: str, wardrobe: dict) -> dict:
 
     session["selected_item"] = results[0]
 
-    session["outfit_suggestion"] = suggest_outfit(session["selected_item"], wardrobe)
-    trace.step(
-        "suggest_outfit",
-        inputs={"selected_item": session["selected_item"], "wardrobe": wardrobe},
-        returned=session["outfit_suggestion"],
-    )
+    # SECOND BRANCH: the model is unreachable, stop with a message instead of a stack trace.
+    try:
+        session["outfit_suggestion"] = suggest_outfit(session["selected_item"], wardrobe)
+        trace.step(
+            "suggest_outfit",
+            inputs={"selected_item": session["selected_item"], "wardrobe": wardrobe},
+            returned=session["outfit_suggestion"],
+        )
 
-    session["fit_card"] = create_fit_card(
-        session["outfit_suggestion"], session["selected_item"]
-    )
-    trace.step(
-        "create_fit_card",
-        inputs={"outfit": session["outfit_suggestion"], "item": session["selected_item"]},
-        returned=session["fit_card"],
-    )
+        session["fit_card"] = create_fit_card(
+            session["outfit_suggestion"], session["selected_item"]
+        )
+        trace.step(
+            "create_fit_card",
+            inputs={"outfit": session["outfit_suggestion"], "item": session["selected_item"]},
+            returned=session["fit_card"],
+        )
+    except ModelUnavailable as exc:
+        session["error"] = f"The model couldn't be reached: {exc}"
+        trace.step("branch", note="model unavailable, stopping before the rest of the loop")
+
     return session
 
 

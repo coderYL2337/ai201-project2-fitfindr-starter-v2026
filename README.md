@@ -343,21 +343,61 @@ python app.py ask 'designer ballgown size XXS under $5' --trace
 
      `python run_eval.py --label after` -->
 
-**What I changed:**
+**What I changed:** Added a second branch in `agent.py::run_agent` — wrapped the `suggest_outfit` / `create_fit_card` calls in a `try/except ModelUnavailable`, setting `session["error"]` to a readable message (`"The model couldn't be reached: {exc}"`) and returning early instead of letting the exception propagate. One change only; `tools.py` and the MCP wiring are untouched.
 
-**Which failure it was meant to fix:**
+**Which failure it was meant to fix:** The "model unavailable" failure mode. The Before diagnosis found that `run_agent` never caught `ModelUnavailable`, so real 503s from the model service came out of `run_agent` as raw, uncaught exceptions — the same mechanism caused the single miss on criterion 1 and all 3 misses on criterion 5 (empty wardrobe) in the Before run.
 
 ### Run Log — After
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. Matching query completes all three tools | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 2. Impossible query stops before second tool | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. `selected_item` id matches item passed downstream (5 different queries) | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. Fit card mentions price + platform, 2–4 sentences (5 different items) | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 5. Empty wardrobe returns non-empty advice, no crash, no invented item | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+
+> Source: `results/run_2026-10-05_0234_after.md`. Zero crashes across all 65 tries
+> in this run — the model simply didn't 503 this time, which is a problem for
+> proving the fix (see below).
 
 **Did it help, and how do I know:**
+
+The raw numbers look like a clean win (criterion 5 went from 2/5 to 5/5, criterion
+1 from 4/5 to 5/5), but I'm not willing to credit the fix based on that alone —
+this After run happened not to hit a single 503, so the new `except
+ModelUnavailable` branch was never actually exercised by `run_eval.py` this
+time. An improvement measured only against an external service's uptime that
+day isn't a measurement of the code change.
+
+So I verified the mechanism directly instead of relying on luck: I patched
+`agent.suggest_outfit` to raise `ModelUnavailable` on purpose and called
+`run_agent` directly.
+
+```
+$ python -c "
+import unittest.mock as mock
+from generate import ModelUnavailable
+import agent
+from utils.data_loader import get_example_wardrobe
+with mock.patch.object(agent, 'suggest_outfit', side_effect=ModelUnavailable('simulated 503 for verification')):
+    session = agent.run_agent('vintage graphic tee under \$30', get_example_wardrobe())
+    print('error:', session['error'])
+    print('fit_card:', session['fit_card'])
+"
+[2] branch
+      →    model unavailable, stopping before the rest of the loop
+error: The model couldn't be reached: simulated 503 for verification
+fit_card: None
+```
+
+Before this change, the same forced failure would have propagated out of
+`run_agent` as an uncaught `ModelUnavailable`, exactly like the 4 crashes
+recorded in the Before run log. Now it's caught, `session["error"]` carries a
+readable message, and `fit_card`/`outfit_suggestion` stay `None` — the same
+shape as the existing empty-search branch. So: **yes, it helped**, but the
+evidence that matters is this forced test, not the 5/5 After table, which
+mostly reflects a lucky day for the model API rather than the fix itself.
 
 <!-- If it made things worse, say that. Honestly reported, that earns full
      credit and is more interesting than one that worked. -->
