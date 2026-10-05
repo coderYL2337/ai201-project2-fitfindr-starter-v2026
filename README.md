@@ -206,6 +206,21 @@ Found my holy grail denim today and I'm honestly not shutting up about it. These
   size, or fewer keywords in the description."* I confirmed the fix by running
   the ballgown query and reading the message back.
 
+**Moment 3**
+
+- *What I asked for:* After the Before run showed crashes on criteria 1 and 5,
+  I asked Copilot to diagnose why — it read `agent.py` and pointed out that
+  `run_agent` never catches `ModelUnavailable`, so a real 503 from the model
+  propagates straight out instead of becoming a `session["error"]` message.
+- *What came back:* A second branch wrapping `suggest_outfit`/`create_fit_card`
+  in `try/except ModelUnavailable`.
+- *What I changed:* Nothing in the fix itself, but I didn't accept the After
+  run's 5/5 table as proof it worked — that run happened to hit zero real
+  503s. I asked for a way to verify the catch directly, and we mocked
+  `agent.suggest_outfit` to raise `ModelUnavailable` on purpose and confirmed
+  `session["error"]` came back readable with `fit_card` still `None`, instead
+  of a stack trace.
+
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
      Don't fill these in during unit 3.
@@ -411,6 +426,48 @@ mostly reflects a lucky day for the model API rather than the fix itself.
 <!-- For each criterion still missed: what you'd do, and why you stopped where
      you did. "I ran out of time" is fine if it's true. Pretending nothing is
      left is not. -->
+
+All five criteria show MET in the After table, but I don't consider criteria 1
+and 5 fully proven, and there's one real gap the fix doesn't cover:
+
+- **Criteria 1 and 5 (model unavailable) — validated synthetically, not
+  organically.** The After run happened to hit zero real 503s, so
+  `run_eval.py` never exercised the new `except ModelUnavailable` branch on
+  its own; my evidence is the forced mock test, not the 5/5 row. I'd want to
+  re-run `python run_eval.py --label after` on a day the API is visibly
+  rate-limited (or add a way to deliberately inject the error during eval) to
+  see a real crash caught in the wild before I'd fully trust those two rows.
+  I stopped here because reproducing a real 503 on demand isn't in my
+  control, and the synthetic test exercises the exact same code path.
+
+- **Partial session state when `create_fit_card` fails after `suggest_outfit`
+  succeeds.** My `try` wraps both calls, so if the first succeeds and the
+  second raises, `session["outfit_suggestion"]` stays populated while
+  `session["error"]` is also set and `fit_card` is `None` — a mixed state the
+  empty-search branch doesn't have (there, everything downstream is cleanly
+  `None`). `_show()`/`_ask_one()` print `session["error"]` first either way,
+  so nothing currently misbehaves, but a caller that reads `outfit_suggestion`
+  before checking `error` would get a half-finished answer. I didn't fix this
+  because my diagnosis named one mechanism (the missing catch), and widening
+  the fix to also reset `outfit_suggestion` on this specific sub-case felt
+  like a second, undiagnosed change — flagging it instead of fixing it blind.
+
+- **Criteria 3 and 4 were checked by reading the printed output, not by an
+  assertion in code.** I compared `selected_item`'s title/price/platform
+  against the generated text by eye for one try per scenario. That's fine for
+  five scenarios by hand, but it doesn't scale and it's not something
+  `run_eval.py` checks for me — a real fix would be a small checker function
+  that asserts the id match and the price/platform mention programmatically
+  per try, not per scenario. I stopped short of writing it because this unit
+  asked for one diagnosed improvement, not a new test harness.
+
+**On the MCP move:** only `search_listings` runs over MCP; `suggest_outfit`
+and `create_fit_card` are still direct in-process calls, exactly as
+`mcp_server.py` scoped it ("you're moving one tool, not three"). Nothing
+behaved differently after the move — the trace output, the branch logic, and
+every fit card in this unit's runs are identical in shape to the direct-call
+version, which is the whole point: the call shape changed, the return value
+didn't.
 
 
 
