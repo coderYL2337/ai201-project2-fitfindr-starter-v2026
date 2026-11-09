@@ -31,6 +31,18 @@ semantic match, so a phrasing that shares no words with the listing's title or
 description can miss an item that's actually in the data. 4 of 5 leaves room
 for that one phrasing mismatch without excusing a search that misses often.
 
+> **Revised in unit 9:** Given a query that matches at least one listing, the
+> agent completes all four tool calls — `search_listings`,
+> `flag_condition_issues`, `suggest_outfit`, `create_fit_card` — and returns a
+> fit card, in at least 4 of 5 tries.
+>
+> **Why revised:** Not a miss — a change underneath the criterion.
+> `flag_condition_issues` is now a fourth tool in the loop, so "all three
+> tools" no longer names the real sequence. The target itself didn't move;
+> `flag_condition_issues` is a deterministic text check with no model
+> variance to add, so 4 of 5 still only has to absorb `search_listings`'s one
+> phrasing mismatch.
+
 ---
 
 ## 2. An impossible query stops before the second tool
@@ -45,6 +57,17 @@ requires that nothing scores above zero, which a query for an item that isn't
 in the listings at all (e.g. "designer ballgown size XXS under $5") guarantees
 every time. There's no fuzziness here the way there is in criterion 1, so it
 should hold on every try.
+
+> **Revised in unit 9:** Given a query that matches no listings, the agent
+> stops before calling `flag_condition_issues`, `suggest_outfit`, or
+> `create_fit_card`, and returns a message naming what to change — 5 of 5
+> tries.
+>
+> **Why revised:** `flag_condition_issues` sits between `search_listings` and
+> `suggest_outfit`, so "the second tool" is now ambiguous about which one it
+> means. The branch itself didn't move — it still returns before
+> `session["selected_item"]` is ever set — so the same 5 of 5 now covers all
+> three downstream tools instead of two.
 
 ---
 
@@ -70,6 +93,16 @@ This is a plumbing check, not a model check — passing the same dict reference
 along the session is deterministic code, not something the model's wording can
 affect. If this ever fails, the bug is in `run_agent`'s wiring rather than in
 any one tool, so there's no reason to expect it to vary between tries.
+
+> **Revised in unit 9:** Across 5 different matching queries, the `id` of
+> `session["selected_item"]` matches the `id` of the item dict actually
+> received by `flag_condition_issues`, by `suggest_outfit`, and by
+> `create_fit_card` — 5 of 5 tries.
+>
+> **Why revised:** `flag_condition_issues` is a third place `session["selected_item"]`
+> now gets handed off to, and a third place the wiring could silently pass the
+> wrong dict. Checking only two of three downstream tools would leave the
+> newest wiring the one thing this criterion doesn't actually cover.
 
 ---
 
@@ -118,6 +151,94 @@ kind most likely to fail silently — the model inventing a piece the user
 doesn't own — rather than loudly, with an error. That's worth locking down
 now, while it's cheap to check, rather than discovering it as a bad diagnosis
 later.
+
+---
+
+# Unit 9 — criteria for the extension
+
+Five more criteria, written before any unit 9 results existed, for the new
+tool: `flag_condition_issues(listing)`. At least three are about the
+extension itself, not the three tools that already worked; at least one
+names a bad-input path.
+
+---
+
+## 6. Flags fire on known condition language
+
+Across 5 listings whose `description` contains a known issue word (`rip`,
+`stain`, `fading`, `pull`, `worn`, etc.), `flag_condition_issues` returns at
+least one flag naming that exact word — 5 of 5 tries.
+
+**Why this target:**
+
+This is plain word matching against text that's already in the data —
+deterministic, with nothing for a model to vary. A miss here isn't bad luck,
+it's a bug in the word list or the tokenizing, so there's no reason to accept
+less than 5 of 5.
+
+---
+
+## 7. No false flags on clean listings
+
+Across 5 listings whose `description` contains none of the issue words,
+`flag_condition_issues` returns `[]` — 5 of 5 tries.
+
+**Why this target:**
+
+The cost of a false positive here isn't abstract: a tool that flags "pull" in
+"pullover" or invents issues on a clean listing is a tool a user learns to
+ignore entirely, which is worse than not having it. Same determinism argument
+as criterion 6 — 5 of 5 is fair because nothing here is supposed to vary.
+
+---
+
+## 8. Flags are computed on the item the loop actually selected
+
+Across 5 different matching queries, the listing passed into
+`flag_condition_issues` (per the trace step) has the same `id` as
+`session["selected_item"]` — 5 of 5 tries.
+
+**Why this target:**
+
+Same reasoning as the original state criterion (#3): this is `run_agent`'s
+wiring, not the tool's logic or the model's wording. If the wrong item's
+flags ever showed up next to a different item's fit card, the bug is in the
+loop, and there's no reason to expect it to vary between tries.
+
+---
+
+## 9. A listing missing a description doesn't crash the branch
+
+Given a listing dict where `description` is missing or `None` — a malformed
+record, the same kind of gap `brand` already has for most listings —
+`flag_condition_issues` returns `[]` without raising, and `run_agent`
+continues on to `suggest_outfit` rather than stopping the run — 5 of 5
+tries.
+
+**Why this target:**
+
+Real thrift listings are hand-entered and incomplete fields are already
+normal in this data (`brand` is `None` for most of them), so a missing
+`description` is a plausible record, not a contrived edge case. The cost of
+getting this wrong is the whole loop crashing on one incomplete listing
+instead of degrading gracefully the way the empty-wardrobe path already does.
+
+---
+
+## 10. Every run leaves exactly one log record, success or failure
+
+Across 10 runs — 5 that complete normally and 5 that end in `session["error"]`
+being set (via the empty-search branch or a forced `ModelUnavailable`) —
+`logs/run_log.jsonl` gains exactly 10 new records, and each record's
+`outcome` field is `"error"` if and only if that run's `session["error"]` was
+set — 10 of 10.
+
+**Why this target:**
+
+The `finally` block in `run_agent` is what makes a failure leave a record
+instead of just an absence — if a record is ever missing after a run, the
+bug is in the logging wrapper, not in whichever tool failed. There's no
+fuzziness in whether a dict key is `None` or not, so 10 of 10 is the fair bar.
 
 
 
