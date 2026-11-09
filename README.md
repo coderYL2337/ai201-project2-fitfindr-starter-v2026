@@ -751,6 +751,69 @@ result: log grew by 5 (expected 5), 5/5 records had the correct outcome field �
 
 <!-- What you changed, why, and the second run log in the same format. -->
 
+**None of the five formal criteria (6–10) missed** — all MET, 5/5, across all
+three trials in Milestone 5. So this isn't a diagnosis of one of those five;
+it's a real bug I found by hand-testing the system beyond the five criteria,
+in the exact spot criterion 1's own reasoning warns about ("a phrasing that
+shares no words... can miss an item") — except in reverse: a phrasing shared
+the *wrong* word with the *wrong* item.
+
+**What happened:** `python app.py ask 'clean shoes under $30'` returned a
+navy crewneck sweatshirt instead of either pair of sneakers in the data.
+
+**Diagnosis — stage and mechanism:** The stage is `tools.py::_score`, called
+from `search_listings`. The mechanism: `_score` counted a query-word match
+the same whether it hit the listing's `title`/`category` or just its
+free-text `description`. For `"clean shoes"`, the sweatshirt's description
+happens to end in the word *"clean"* (`"No graphics, clean."`) — one point.
+The sneakers score a point too, but only because their `category` field is
+literally `"shoes"` — also one point. Tied at 1, and `_score`'s caller sorts
+with Python's stable sort, which keeps listings in their original
+`listings.json` order on a tie. The sweatshirt happens to appear earlier in
+the file, so it wins — not because it's more relevant, but because it's
+first and the scorer can't tell the difference between an incidental
+adjective and a word that names what the item *is*.
+
+**What I changed:** One function, `tools.py::_score`. A query word matching
+`title`, `category`, or `style_tags` now scores 2 points; a word matching
+only in `description` scores 1. Nothing else — `search_listings`'s filtering,
+`flag_condition_issues`, `suggest_outfit`, and `create_fit_card` are
+untouched.
+
+**Did it help?**
+
+```
+Before:
+$ python -c "from tools import search_listings; print([l['title'] for l in search_listings('clean shoes', max_price=30)])"
+['Oversized Crewneck Sweatshirt — Vintage Navy', 'Low-Top Canvas Sneakers — Off-White']
+
+After:
+$ python -c "from tools import search_listings; print([l['title'] for l in search_listings('clean shoes', max_price=30)])"
+['Low-Top Canvas Sneakers — Off-White', 'Oversized Crewneck Sweatshirt — Vintage Navy']
+```
+
+Yes — the sneakers now outrank the sweatshirt for "clean shoes," and
+`python app.py ask 'clean shoes under $30'` now selects a pair of shoes.
+
+**Run Log and Verdicts, after — same five criteria, three more trials:**
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 6. Flags fire on known condition language | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 7. No false flags on clean listings | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 8. Flags computed on the item actually selected | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 9. Malformed listing doesn't crash the branch | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 10. Every run leaves exactly one log record | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+
+Identical to the before table — expected, since the fix only touches
+`search_listings`'s tie-breaking, and none of criteria 6–10 test search
+ranking. **The honest reading:** the fix didn't move the numbers this unit's
+own criteria measure, because those criteria were never testing for this —
+the real evidence that it helped is the "clean shoes" example above, not
+this table. That's worth naming rather than papering over: a clean set of
+MET rows can coexist with a real bug the criteria simply weren't written to
+catch.
+
 ---
 
 ## What's Still Broken
