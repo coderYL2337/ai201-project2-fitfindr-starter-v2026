@@ -227,18 +227,21 @@ instead of degrading gracefully the way the empty-wardrobe path already does.
 
 ## 10. Every run leaves exactly one log record, success or failure
 
-Across 10 runs — 5 that complete normally and 5 that end in `session["error"]`
-being set (via the empty-search branch or a forced `ModelUnavailable`) —
-`logs/run_log.jsonl` gains exactly 10 new records, and each record's
-`outcome` field is `"error"` if and only if that run's `session["error"]` was
-set — 10 of 10.
+Across 5 runs — 3 that complete normally and 2 that end in `session["error"]`
+being set (one via the empty-search branch, one via a forced
+`ModelUnavailable`) — `logs/run_log.jsonl` gains exactly 5 new records, and
+each record's `outcome` field is `"error"` if and only if that run's
+`session["error"]` was set — 5 of 5.
 
 **Why this target:**
 
 The `finally` block in `run_agent` is what makes a failure leave a record
 instead of just an absence — if a record is ever missing after a run, the
-bug is in the logging wrapper, not in whichever tool failed. There's no
-fuzziness in whether a dict key is `None` or not, so 10 of 10 is the fair bar.
+bug is in the logging wrapper, not in whichever tool failed. Five runs with
+both failure mechanisms represented is enough to exercise every path the
+`finally` block has to cover; there's no fuzziness in whether a dict key is
+`None` or not, so 5 of 5 is the fair bar, matching the format of criteria
+6–9 rather than inventing a stricter one.
 
 
 

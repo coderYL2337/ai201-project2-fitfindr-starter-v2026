@@ -113,9 +113,9 @@ def _check_malformed_listing(use_trace):
 
 def _check_log_record(use_trace):
     """Criterion 10 — every run leaves exactly one log record, success or
-    failure. Runs one success, one natural failure (empty search), and one
-    forced ModelUnavailable, then checks logs/run_log.jsonl grew by exactly
-    three records with the right outcome field on each."""
+    failure. Runs 3 successes and 2 failures (one natural empty-search, one
+    forced ModelUnavailable), then checks logs/run_log.jsonl grew by exactly
+    5 records with the right outcome field on each."""
     import unittest.mock as mock
     import agent as agent_module
     import instrumentation
@@ -129,29 +129,25 @@ def _check_log_record(use_trace):
     wardrobe = get_example_wardrobe()
     before = len(instrumentation.read_log())
 
-    # 5 runs expected to complete normally, 5 expected to end in session["error"]
-    # (3 via the natural empty-search branch, 2 via a forced ModelUnavailable) —
-    # matching criterion 10's "5 that complete normally and 5 that end in error".
+    # 3 runs expected to complete normally, 2 expected to end in session["error"]
+    # (one via the natural empty-search branch, one via a forced ModelUnavailable) —
+    # matching criterion 10's "3 that complete normally and 2 that end in error".
     success_queries = [
         "vintage graphic tee under $30",
         "90s track jacket in size M",
         "silk slip dress in midi length under $40",
-        "denim jacket under $50",
-        "platform sneakers size 8",
     ]
     expect_error = []
     for query in success_queries:
         s = agent_module.run_agent(query, wardrobe)
         expect_error.append(bool(s.get("error")))
 
-    for _ in range(3):
-        s = agent_module.run_agent("designer ballgown size XXS under $5", wardrobe)
-        expect_error.append(bool(s.get("error")))
+    s = agent_module.run_agent("designer ballgown size XXS under $5", wardrobe)
+    expect_error.append(bool(s.get("error")))
 
-    for _ in range(2):
-        with mock.patch.object(agent_module, "suggest_outfit", side_effect=ModelUnavailable("forced for criterion 10")):
-            s = agent_module.run_agent("corduroy pants under $25", wardrobe)
-        expect_error.append(bool(s.get("error")))
+    with mock.patch.object(agent_module, "suggest_outfit", side_effect=ModelUnavailable("forced for criterion 10")):
+        s = agent_module.run_agent("corduroy pants under $25", wardrobe)
+    expect_error.append(bool(s.get("error")))
 
     after_records = instrumentation.read_log()
     new_records = after_records[before:]
