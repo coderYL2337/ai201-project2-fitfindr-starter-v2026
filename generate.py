@@ -156,6 +156,10 @@ def call_count() -> int:
     return _session_calls
 
 
+def cache_hit_count() -> int:
+    return _cache_hits
+
+
 def token_counts() -> dict:
     """
     What this session actually spent, in tokens, as reported by the service.

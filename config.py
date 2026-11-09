@@ -93,3 +93,4 @@ CACHE_DIR = ROOT / ".cache"
 
 DATA_DIR = ROOT / "data"
 RESULTS_DIR = ROOT / "results"
+LOG_FILE = ROOT / "logs" / "run_log.jsonl"
