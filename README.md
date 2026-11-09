@@ -642,6 +642,11 @@ runs averaged **2.78 seconds** of real wall-clock time per run.
   specifically because `serve.py` answers one request at a time — that's
   4.6 minutes the single worker would be busy out of 1,440 minutes in a day
 
+**In one sentence:** a hundred people a day costs this system about 65,000
+tokens and roughly 4.6 minutes of real compute — comfortably inside the free
+tier's 15-requests/minute pacing and nowhere near enough load to need a second
+worker.
+
 ---
 
 ## Run Log and Verdicts
@@ -836,11 +841,80 @@ simply weren't written to catch.
 <!-- What you'd do about each remaining miss, why you stopped, and the one
      thing you'd do first. -->
 
+All five formal criteria (6–10) are MET, 5 of 5, three trials straight —
+there's no missed criterion to diagnose here. That's not the same as nothing
+being broken, though, and two real gaps are worth naming because the
+criteria simply weren't written to catch them:
+
+- **`flag_condition_issues` doesn't understand negation.** The docstring
+  already says so, and criteria 6/7 never tested it: a description reading
+  "no rips or stains" still flags `rip` and `stain`, exactly like lst_001's
+  real listing does in this unit's own evidence above. What I'd do: nothing
+  cheap fixes this correctly — real negation handling needs either a small
+  dependency parse around each match or a second model call to classify
+  sentiment per sentence, and either one changes the tool from "free, instant
+  text check" to something with real latency and cost. I stopped because
+  that trade isn't obviously worth it for a sanity-check tool whose whole
+  value proposition is being the cheap one.
+
+- **The `_score` fix is a patch on the exact failure class, not a cure for
+  it.** Weighting `title`/`category` over `description` fixed "clean shoes,"
+  but the scorer is still flat keyword overlap — any other generic adjective
+  that happens to share a word with an unrelated item's category can still
+  tie, just with higher numbers on both sides now. What I'd do: write a
+  scenario in `scenarios.py` that scans every pair of (query word, listing)
+  combinations in the data for exactly this kind of collision, so the next
+  one gets caught by a criterion instead of by a user typing the wrong
+  query. I stopped because this unit asked for one diagnosed improvement,
+  not a systematic audit of the whole scoring function.
+
+**If I had another unit:** the one thing I'd do first is build that
+collision-scanning scenario, not add a fifth tool or move more of the system
+onto MCP. The search-scoring bug is the only failure in this whole project
+that a user actually hit in the wild rather than one I found by testing —
+that's the signal that this is where the real risk lives, and everything
+else so far has been caught before it shipped.
+
 ---
 
 ## How I Used AI
 
 <!-- Two specific moments — what you asked, what you got, what you changed. -->
+
+**Moment 1**
+
+- *What I asked for:* I reported a real failure I'd found by hand —
+  `python app.py ask 'clean shoes under $30'` returned a sweatshirt, not
+  either pair of sneakers in the data — and asked for the cause before any
+  fix.
+- *What came back:* A diagnosis naming the exact stage and mechanism:
+  `tools.py::_score` counted a word hitting the sweatshirt's free-text
+  `description` ("clean") the same as a word hitting the sneakers'
+  structured `category` ("shoes"), so they tied, and ties broke on
+  `listings.json`'s original order rather than relevance.
+- *What I changed:* I didn't accept the diagnosis on faith — I asked for the
+  actual `_score` values first (`_score(listing, query_words)` on both
+  items), confirmed they really were tied at 1, and only then applied the
+  weighted fix (`title`/`category`/`style_tags` worth 2, `description` worth
+  1). I verified it by re-running the exact failing command before and
+  after, not by trusting the explanation alone.
+
+**Moment 2**
+
+- *What I asked for:* After Milestone 5/6 were written up in the README, I
+  asked whether I should have something in `results/` for the before/after,
+  since I didn't see anything there.
+- *What came back:* An honest admission that the Milestone 5 evidence had
+  been produced by a one-off script calling `run_eval.py::run_once`
+  directly, bypassing `run_eval.py::main`'s own `write_report()` — so none
+  of it had gone through the same pipeline that produced the unit 3/4
+  results files I could already see sitting in `results/`.
+- *What I changed:* Rather than hand-writing a matching file, I asked for
+  (and got) a `--criteria` filter added to `run_eval.py` so criteria 6–10
+  could be run through the real, official path, producing
+  `results/run_2026-11-09_0350_unit9_after.md` the same way unit 4's files
+  were produced — then filled in its Try/Verdict columns from that file's
+  own real output rather than reusing the earlier script's numbers.
 
 ---
 
