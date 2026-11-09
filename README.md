@@ -649,6 +649,102 @@ runs averaged **2.78 seconds** of real wall-clock time per run.
 <!-- Five criteria across three trials, MET or MISSED, and for each miss the
      stage and the mechanism. -->
 
+Three trials, nothing changed in between, caching off. Produced by a one-off
+harness built on `run_eval.py::run_once` (criteria 6–8 reuse the real
+`agent.py::run_agent` loop against the `scenarios.py` entries tagged 6/7/8;
+criteria 9 and 10 dispatch to `run_eval.py::_check_malformed_listing` and
+`run_eval.py::_check_log_record`, two new `"direct_check"` scenario handlers).
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 6. Flags fire on known condition language | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 7. No false flags on clean listings | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 8. Flags computed on the item actually selected | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 9. Malformed listing doesn't crash the branch | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 10. Every run leaves exactly one log record | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+
+No misses across any criterion or trial, so there's no stage/mechanism to
+diagnose this round — all five targets held on every try.
+
+**Real output, one per criterion, from Run 1:**
+
+```
+criterion 6 — tools.py::flag_condition_issues, via agent.py::run_agent
+scenario: "condition flags: fading jeans (lst_001)"
+
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 10 items: Vintage Levi's 501 Jeans — Medium Wash, High-Waisted Denim Shorts — Cutoff, Baggy Carpenter Jeans — Dark Wash … +7 more
+[2] flag_condition_issues
+      in:  dict with keys: listing
+      out: 3 items: {'flag': 'rips', 'severity': 'major'}…
+[3] suggest_outfit
+      in:  dict with keys: selected_item, wardrobe
+      out: Yes, definitely buy them! Pair your new vintage Levi's with the white ribbed tank top, layered under the vinta…
+[4] create_fit_card
+      in:  dict with keys: outfit, item
+      out: Found these vintage Levi's 501 jeans on depop for just $38 and I am never taking them off. They have that 90s …
+
+condition_flags on lst_001: [{'flag': 'rips', 'severity': 'major'}, {'flag': 'stains', 'severity': 'major'}, {'flag': 'fading', 'severity': 'minor'}]
+```
+
+```
+criterion 7 — tools.py::flag_condition_issues, via agent.py::run_agent
+scenario: "condition flags: clean track jacket (lst_004)"
+
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 10 items: 90s Track Jacket — Navy/White Stripe, Platform Sneakers — White Chunky Sole, 90s Leather Bomber — Black … +7 more
+[2] flag_condition_issues
+      in:  dict with keys: listing
+      out: [] (empty)
+[3] suggest_outfit
+      in:  dict with keys: selected_item, wardrobe
+      out: Definitely grab it—this will fit right into your wardrobe! Pair it with your **baggy straight-leg jeans** and …
+[4] create_fit_card
+      in:  dict with keys: outfit, item
+      out: Scored this vintage 90s track jacket on Poshmark for just $45.00 and I am officially obsessed. Throwing it on …
+
+condition_flags on lst_004: []
+```
+
+```
+criterion 8 — agent.py::run_agent, spying on tools.py::flag_condition_issues
+scenario: "state check (flags): track jacket"
+
+id flag_condition_issues was actually called with: lst_004
+id of session["selected_item"]:                    lst_004
+(same id both ways — confirmed by wrapping the real flag_condition_issues in
+ a spy function and comparing its captured argument against the session)
+```
+
+```
+criterion 9 — run_eval.py::_check_malformed_listing
+scenario: "malformed listing: missing description"
+
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 1 items: Test Item With No Description
+[2] flag_condition_issues
+      in:  dict with keys: listing
+      out: [] (empty)
+[3] suggest_outfit
+      in:  dict with keys: selected_item, wardrobe
+      out: Since the thrifted top is a mystery, let's assume it's a versatile piece like a printed graphic tee or a brigh…
+[4] create_fit_card
+      in:  dict with keys: outfit, item
+      out: Found this absolute mystery top while rummaging through the racks and I'm honestly obsessed with the vibe. Sco…
+
+result: condition_flags=[], outfit_suggestion ran=True: PASS
+```
+
+```
+criterion 10 — run_eval.py::_check_log_record, reading logs/run_log.jsonl
+scenario: "log record: success + both failure branches"
+
+result: log grew by 5 (expected 5), 5/5 records had the correct outcome field — PASS
+```
+
 ---
 
 ## The Improvement
