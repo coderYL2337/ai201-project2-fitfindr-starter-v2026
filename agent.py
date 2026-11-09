@@ -19,7 +19,7 @@ import config
 import trace
 # from tools import search_listings, suggest_outfit, create_fit_card
 from mcp_client import call_tool
-from tools import suggest_outfit, create_fit_card
+from tools import suggest_outfit, create_fit_card, flag_condition_issues
 from generate import ModelUnavailable
 
 
@@ -72,6 +72,7 @@ def new_session(query: str, wardrobe: dict) -> dict:
         "search_results": [],        # everything search_listings returned
         "selected_item": None,       # the one you chose — goes into suggest_outfit
         "wardrobe": wardrobe,        # the user's wardrobe
+        "condition_flags": [],       # what flag_condition_issues returned for the selected item
         "outfit_suggestion": None,   # what suggest_outfit returned
         "fit_card": None,            # what create_fit_card returned
         "error": None,               # set when the run ended early
@@ -166,6 +167,13 @@ def run_agent(query: str, wardrobe: dict) -> dict:
 
     session["selected_item"] = results[0]
 
+    session["condition_flags"] = flag_condition_issues(session["selected_item"])
+    trace.step(
+        "flag_condition_issues",
+        inputs={"listing": session["selected_item"]},
+        returned=session["condition_flags"],
+    )
+
     # SECOND BRANCH: the model is unreachable, stop with a message instead of a stack trace.
     try:
         session["outfit_suggestion"] = suggest_outfit(session["selected_item"], wardrobe)
@@ -200,6 +208,7 @@ def _show(session: dict) -> None:
 
     item = session["selected_item"] or {}
     print(f"  found:    {item.get('title')} — ${item.get('price')} on {item.get('platform')}")
+    print(f"  condition flags: {session['condition_flags']}")
     print(f"  outfit:   {session['outfit_suggestion']}")
     print(f"  fit card: {session['fit_card']}")
 
