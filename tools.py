@@ -51,14 +51,24 @@ def _matches_size(listing_size: str, query_size: str) -> bool:
 
 
 def _score(listing: dict, query_words: list[str]) -> int:
-    haystack = " ".join([
+    # Structured fields (what the item IS) count for more than a word that
+    # happens to appear in the free-text description — otherwise a generic
+    # adjective like "clean" in one item's description can tie, or beat, a
+    # query word that actually names the category of a different item.
+    structured_words = set(_keywords(" ".join([
         listing.get("title", ""),
-        listing.get("description", ""),
         listing.get("category", ""),
         " ".join(listing.get("style_tags", []) or []),
-    ])
-    haystack_words = set(_keywords(haystack))
-    return sum(1 for w in query_words if w in haystack_words)
+    ])))
+    description_words = set(_keywords(listing.get("description", "")))
+
+    score = 0
+    for w in query_words:
+        if w in structured_words:
+            score += 2
+        elif w in description_words:
+            score += 1
+    return score
 
 
 # ── Tool 1: search_listings ───────────────────────────────────────────────────
