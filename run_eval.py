@@ -129,25 +129,39 @@ def _check_log_record(use_trace):
     wardrobe = get_example_wardrobe()
     before = len(instrumentation.read_log())
 
+    # 5 runs expected to complete normally, 5 expected to end in session["error"]
+    # (3 via the natural empty-search branch, 2 via a forced ModelUnavailable) —
+    # matching criterion 10's "5 that complete normally and 5 that end in error".
+    success_queries = [
+        "vintage graphic tee under $30",
+        "90s track jacket in size M",
+        "silk slip dress in midi length under $40",
+        "denim jacket under $50",
+        "platform sneakers size 8",
+    ]
     expect_error = []
-    s = agent_module.run_agent("vintage graphic tee under $30", wardrobe)
-    expect_error.append(bool(s.get("error")))
+    for query in success_queries:
+        s = agent_module.run_agent(query, wardrobe)
+        expect_error.append(bool(s.get("error")))
 
-    s = agent_module.run_agent("designer ballgown size XXS under $5", wardrobe)
-    expect_error.append(bool(s.get("error")))
+    for _ in range(3):
+        s = agent_module.run_agent("designer ballgown size XXS under $5", wardrobe)
+        expect_error.append(bool(s.get("error")))
 
-    with mock.patch.object(agent_module, "suggest_outfit", side_effect=ModelUnavailable("forced for criterion 10")):
-        s = agent_module.run_agent("denim jacket under $50", wardrobe)
-    expect_error.append(bool(s.get("error")))
+    for _ in range(2):
+        with mock.patch.object(agent_module, "suggest_outfit", side_effect=ModelUnavailable("forced for criterion 10")):
+            s = agent_module.run_agent("corduroy pants under $25", wardrobe)
+        expect_error.append(bool(s.get("error")))
 
     after_records = instrumentation.read_log()
     new_records = after_records[before:]
     grew_correctly = len(new_records) == len(expect_error)
-    outcomes_match = grew_correctly and all(
+    correct = grew_correctly and [
         (rec["outcome"] == "error") == expected
         for rec, expected in zip(new_records, expect_error)
-    )
-    ok = grew_correctly and outcomes_match
+    ]
+    score = sum(correct) if grew_correctly else 0
+    ok = grew_correctly and score == len(expect_error)
 
     record = {
         "error": None,
@@ -156,7 +170,8 @@ def _check_log_record(use_trace):
         "crashed": None,
         "note": (
             f"log grew by {len(new_records)} (expected {len(expect_error)}), "
-            f"outcome fields correct: {outcomes_match} — " + ("PASS" if ok else "FAIL")
+            f"{score}/{len(expect_error)} records had the correct outcome field — "
+            + ("PASS" if ok else "FAIL")
         ),
     }
     return record
