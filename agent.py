@@ -14,8 +14,11 @@ Build and test your three tools in `tools.py` first. Then come here.
 """
 
 import re
+import time
 
 import config
+import generate
+import instrumentation
 import trace
 # from tools import search_listings, suggest_outfit, create_fit_card
 from mcp_client import call_tool
@@ -136,8 +139,40 @@ def run_agent(query: str, wardrobe: dict) -> dict:
 
       • A handler for ModelUnavailable, so a bad key produces a message rather
         than a stack trace. The import is already at the top of this file.
+
+    Every call also appends one structured record to config.LOG_FILE via
+    `instrumentation` — success or failure, so a run that errors still leaves
+    a trace of having happened. See instrumentation.py.
     """
+    start = time.monotonic()
+    calls_before = generate.call_count()
+    cache_before = generate.cache_hit_count()
+    tokens_before = generate.token_counts()["total"]
+
     session = new_session(query, wardrobe)
+    try:
+        _run_loop(query, wardrobe, session)
+    except Exception as exc:
+        session["error"] = session.get("error") or str(exc)
+        raise
+    finally:
+        record = instrumentation.build_record(
+            query,
+            session,
+            duration_seconds=time.monotonic() - start,
+            model_calls=generate.call_count() - calls_before,
+            cache_hits=generate.cache_hit_count() - cache_before,
+            tokens_total=generate.token_counts()["total"] - tokens_before,
+        )
+        instrumentation.log_run(record)
+
+    return session
+
+
+def _run_loop(query: str, wardrobe: dict, session: dict) -> None:
+    """The actual planning loop — mutates `session` in place. Split out of
+    run_agent() so timing/logging wraps every exit, including an uncaught
+    exception."""
     trace.check_iterations(1)
 
     session["parsed"] = _parse_query(query)
@@ -163,7 +198,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             "size, or fewer keywords in the description."
         )
         trace.step("branch", note="empty search results, stopping before suggest_outfit")
-        return session
+        return
 
     session["selected_item"] = results[0]
 
@@ -194,8 +229,6 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     except ModelUnavailable as exc:
         session["error"] = f"The model couldn't be reached: {exc}"
         trace.step("branch", note="model unavailable, stopping before the rest of the loop")
-
-    return session
 
 
 # ── running it directly ───────────────────────────────────────────────────────
