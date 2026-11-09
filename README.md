@@ -868,12 +868,15 @@ criteria simply weren't written to catch them:
   query. I stopped because this unit asked for one diagnosed improvement,
   not a systematic audit of the whole scoring function.
 
-**If I had another unit:** the one thing I'd do first is build that
-collision-scanning scenario, not add a fifth tool or move more of the system
-onto MCP. The search-scoring bug is the only failure in this whole project
-that a user actually hit in the wild rather than one I found by testing —
-that's the signal that this is where the real risk lives, and everything
-else so far has been caught before it shipped.
+**If I had another unit:** the one thing I'd do first is write a check that
+scans the whole listings file for the next "clean shoes"-style mix-up —
+cases where a word in one item's free-text description accidentally ties
+with a word that correctly names a different item's category — so the next
+one gets caught automatically instead of by a real person typing the wrong
+query, which is how this one was actually found. I'd pick that over adding a
+fifth tool or moving more of the system onto MCP, because this is the only
+bug in the whole project that a user hit in the wild rather than one I found
+by testing — everything else so far was caught before it ever shipped.
 
 ---
 
@@ -882,6 +885,19 @@ else so far has been caught before it shipped.
 <!-- Two specific moments — what you asked, what you got, what you changed. -->
 
 **Moment 1**
+
+- *What I asked for:* My draft of criterion 10 targeted "10 of 10" runs. I
+  asked why, and whether "5 of 5" would do instead.
+- *What came back:* An admission that 10 wasn't a real requirement — I'd
+  loosely copied it from one row of the Milestone 5 instructions' example
+  table, and the same mechanism (the log growing by the right amount, with
+  the right outcome on each record) is just as provable with fewer runs.
+- *What I changed:* I rewrote criterion 10 in `criteria.md` to "5 of 5" (3
+  successful runs plus 2 failures — one natural, one forced), and cut
+  `run_eval.py::_check_log_record` down to match. That also halved how many
+  real model calls that one criterion costs every time it's tested.
+
+**Moment 2**
 
 - *What I asked for:* I reported a real failure I'd found by hand —
   `python app.py ask 'clean shoes under $30'` returned a sweatshirt, not
@@ -898,23 +914,6 @@ else so far has been caught before it shipped.
   weighted fix (`title`/`category`/`style_tags` worth 2, `description` worth
   1). I verified it by re-running the exact failing command before and
   after, not by trusting the explanation alone.
-
-**Moment 2**
-
-- *What I asked for:* After Milestone 5/6 were written up in the README, I
-  asked whether I should have something in `results/` for the before/after,
-  since I didn't see anything there.
-- *What came back:* An honest admission that the Milestone 5 evidence had
-  been produced by a one-off script calling `run_eval.py::run_once`
-  directly, bypassing `run_eval.py::main`'s own `write_report()` — so none
-  of it had gone through the same pipeline that produced the unit 3/4
-  results files I could already see sitting in `results/`.
-- *What I changed:* Rather than hand-writing a matching file, I asked for
-  (and got) a `--criteria` filter added to `run_eval.py` so criteria 6–10
-  could be run through the real, official path, producing
-  `results/run_2026-11-09_0350_unit9_after.md` the same way unit 4's files
-  were produced — then filled in its Try/Verdict columns from that file's
-  own real output rather than reusing the earlier script's numbers.
 
 ---
 
