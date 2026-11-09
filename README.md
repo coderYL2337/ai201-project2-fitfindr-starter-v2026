@@ -505,6 +505,87 @@ didn't.
      shows your criteria existed before your results did.
      ═════════════════════════════════════════════════════════════════════ -->
 
+<!-- ═══════════════════════ UNIT 5 ═══════════════════════
+
+     Project 9 The Capstone.
+     ═══════════════════════════════════════════════════════════════════ -->
+
+---
+
+## What This Extends
+
+<!-- Which of your four systems, and what's new. -->
+This extends project2 'FitFindr'. What's new is a fourth tool,
+`flag_condition_issues(listing)` — it scans a listing's `description` for
+condition-reducing language ("rip", "stain", "pilling", "fading", "pull") and
+returns a list of flags plus a severity, independent of whatever the
+`condition` field itself claims. It's a sanity check on the data, not a
+retrieval or generation step, so it slots in right after `search_listings`
+picks a candidate.
+
+---
+
+## The Shape
+
+<!-- A, B or C, and what you decided is out of scope. -->
+C — Extend one capability. Add a fourth tool,
+`flag_condition_issues(listing)`, alongside the existing three.
+
+**Out of scope:** I'm not adding a second retrieval strategy to
+`search_listings` — the keyword-overlap scoring stays as-is. I'm not touching
+`suggest_outfit`'s wardrobe-matching logic — the new tool only reads a
+listing's `description`, it doesn't talk to the wardrobe. And I'm not moving
+the new tool onto MCP — it stays a direct, in-process call like
+`suggest_outfit` and `create_fit_card`, so the one capability I'm adding stays
+isolated from the unit 4 MCP migration.
+
+---
+
+## Running It
+
+<!-- Which path, and a pointer to RUNNING.md. -->
+Path B — local with logs. 
+Read [RUNNING.md](RUNNING.md) 
+
+---
+
+## Instrumentation
+
+<!-- What each log record holds, and at least ten entries pasted as text. -->
+
+---
+
+## What It Costs
+
+<!-- Your measured per-run cost, how you measured it, and the hundred-a-day
+     arithmetic. -->
+
+---
+
+## Run Log and Verdicts
+
+<!-- Five criteria across three trials, MET or MISSED, and for each miss the
+     stage and the mechanism. -->
+
+---
+
+## The Improvement
+
+<!-- What you changed, why, and the second run log in the same format. -->
+
+---
+
+## What's Still Broken
+
+<!-- What you'd do about each remaining miss, why you stopped, and the one
+     thing you'd do first. -->
+
+---
+
+## How I Used AI
+
+<!-- Two specific moments — what you asked, what you got, what you changed. -->
+
 ---
 
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**
