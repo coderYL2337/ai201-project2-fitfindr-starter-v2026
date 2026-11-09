@@ -178,6 +178,9 @@ def main():
     parser.add_argument("--tries", "--trials", type=int, default=5, dest="tries",
                         help="tries per scenario (default 5, matching your criteria)")
     parser.add_argument("--label", default="", help="a name for this run, e.g. 'before'")
+    parser.add_argument("--criteria", default="",
+                        help="comma-separated criterion numbers to run, e.g. '6,7,8,9,10' "
+                             "(default: all scenarios in scenarios.py)")
     args = parser.parse_args()
 
     problems = scenario_module.validate()
@@ -187,7 +190,15 @@ def main():
             print(f"  - {problem}", file=sys.stderr)
         sys.exit(1)
 
-    if not scenario_module.SCENARIOS:
+    scenario_list = scenario_module.SCENARIOS
+    if args.criteria:
+        wanted = {int(n) for n in args.criteria.split(",")}
+        scenario_list = [s for s in scenario_list if s.get("criterion") in wanted]
+        if not scenario_list:
+            print(f"No scenarios tagged with criteria {sorted(wanted)}.", file=sys.stderr)
+            sys.exit(1)
+
+    if not scenario_list:
         print("scenarios.py is empty. Milestone 3 starts by filling it in.", file=sys.stderr)
         sys.exit(1)
 
@@ -199,7 +210,7 @@ def main():
     print("Cache is OFF for this run — that's deliberate.\n")
 
     rows = []
-    for scenario in scenario_module.SCENARIOS:
+    for scenario in scenario_list:
         if scenario.get("direct_check"):
             print(f"{scenario['name']}  (direct check: {scenario['direct_check']})")
         else:

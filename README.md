@@ -649,11 +649,18 @@ runs averaged **2.78 seconds** of real wall-clock time per run.
 <!-- Five criteria across three trials, MET or MISSED, and for each miss the
      stage and the mechanism. -->
 
-Three trials, nothing changed in between, caching off. Produced by a one-off
-harness built on `run_eval.py::run_once` (criteria 6–8 reuse the real
-`agent.py::run_agent` loop against the `scenarios.py` entries tagged 6/7/8;
-criteria 9 and 10 dispatch to `run_eval.py::_check_malformed_listing` and
-`run_eval.py::_check_log_record`, two new `"direct_check"` scenario handlers).
+Three trials, nothing changed in between, caching off. Produced by
+`python run_eval.py --criteria 6,7,8,9,10 --tries 3 --label unit9_after`,
+which runs the real `agent.py::run_agent` loop against the five scenarios
+each for criteria 6, 7, and 8, and dispatches criteria 9 and 10 to
+`run_eval.py::_check_malformed_listing` and `run_eval.py::_check_log_record`.
+Each criterion's "x of 5" below is the count across that criterion's 5
+scenarios within one trial, read off the raw per-scenario output in the
+results file.
+
+> Source: `results/run_2026-11-09_0350_unit9_after.md`, produced by
+> `run_eval.py::main`. One row per scenario, 3 tries each — all 17 rows
+> PASS on every try.
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
@@ -797,6 +804,13 @@ Yes — the sneakers now outrank the sweatshirt for "clean shoes," and
 
 **Run Log and Verdicts, after — same five criteria, three more trials:**
 
+The committed `results/run_2026-11-09_0350_unit9_after.md` (cited above) was
+generated after this fix, so the numbers above already **are** the after
+numbers. I didn't generate a separate pre-fix results file for criteria
+6–10, because the fix only touches `tools.py::_score`'s tie-breaking — none
+of criteria 6–10 exercise `search_listings`'s ranking, so there's no reason
+to expect, and no evidence that, a pre-fix run would differ:
+
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
 | 6. Flags fire on known condition language | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
@@ -805,16 +819,17 @@ Yes — the sneakers now outrank the sweatshirt for "clean shoes," and
 | 9. Malformed listing doesn't crash the branch | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
 | 10. Every run leaves exactly one log record | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
 
-Identical to the before table — expected, since the fix only touches
-`search_listings`'s tie-breaking, and none of criteria 6–10 test search
-ranking. **The honest reading:** the fix didn't move the numbers this unit's
-own criteria measure, because those criteria were never testing for this —
-the real evidence that it helped is the "clean shoes" example above, not
-this table. That's worth naming rather than papering over: a clean set of
-MET rows can coexist with a real bug the criteria simply weren't written to
-catch.
+Identical to the before table because it's the same table — expected, since
+the fix only touches `search_listings`'s tie-breaking, and none of criteria
+6–10 test search ranking. **The honest reading:** the fix didn't move the
+numbers this unit's own criteria measure, because those criteria were never
+testing for this — the real evidence that it helped is the "clean shoes"
+example above, not this table. That's worth naming rather than papering
+over: a clean set of MET rows can coexist with a real bug the criteria
+simply weren't written to catch.
 
 ---
+
 
 ## What's Still Broken
 
