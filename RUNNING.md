@@ -146,6 +146,15 @@ Useful flags on `ask`:
 
 ## Running it somewhere else — **unit 9**
 
+Unit 9 asks for one of two paths: **Path A**, deployed to a host somewhere
+else, or **Path B**, local with logs. This submission takes **Path B** —
+anyone, including the grader, runs FitFindr by cloning the repo and following
+**Clone and run it locally** above. Nothing here needs a deployed server.
+
+The rest of this section — `serve.py`, gunicorn, hosting — is Path A, kept
+here for reference in case you choose it instead. It isn't part of this
+submission.
+
 Everything above exits when the command finishes. A host has nothing to keep
 running, so before you can deploy this you need something that stays up.
 `serve.py` is that: the same `run_agent()`, behind two HTTP routes.
