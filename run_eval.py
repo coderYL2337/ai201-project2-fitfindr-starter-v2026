@@ -43,6 +43,12 @@ def run_once(scenario, use_trace=True):
     from utils.data_loader import get_example_wardrobe, get_empty_wardrobe
     import trace as trace_module
 
+    direct_check = scenario.get("direct_check")
+    if direct_check == "malformed_listing":
+        return _check_malformed_listing(use_trace)
+    if direct_check == "log_record":
+        return _check_log_record(use_trace)
+
     wardrobe = (
         get_empty_wardrobe() if scenario["wardrobe"] == "empty" else get_example_wardrobe()
     )
@@ -50,7 +56,7 @@ def run_once(scenario, use_trace=True):
     if use_trace:
         trace_module.start_trace()
 
-    record = {"error": None, "session": None, "trace": "", "crashed": None}
+    record = {"error": None, "session": None, "trace": "", "crashed": None, "note": None}
     try:
         record["session"] = run_agent(scenario["query"], wardrobe)
     except Exception as exc:  # noqa: BLE001 — a crash is a result worth logging
@@ -60,6 +66,99 @@ def run_once(scenario, use_trace=True):
     if use_trace:
         record["trace"] = trace_module.get_trace()
 
+    return record
+
+
+def _check_malformed_listing(use_trace):
+    """Criterion 9 — a listing with no description shouldn't crash the branch.
+
+    Real data always has a description, so this injects one malformed listing
+    by mocking the MCP call site in agent.py — the same technique used to
+    force ModelUnavailable in unit 4."""
+    import unittest.mock as mock
+    import agent as agent_module
+    from utils.data_loader import get_example_wardrobe
+    import trace as trace_module
+
+    malformed = {
+        "id": "test_malformed", "title": "Test Item With No Description",
+        "description": None, "category": "tops", "style_tags": [], "size": "M",
+        "condition": "fair", "price": 10.0, "colors": [], "brand": None,
+        "platform": "depop",
+    }
+
+    if use_trace:
+        trace_module.start_trace()
+
+    record = {"error": None, "session": None, "trace": "", "crashed": None, "note": None}
+    try:
+        with mock.patch.object(agent_module, "call_tool", return_value=[malformed]):
+            session = agent_module.run_agent("anything — search_listings is mocked", get_example_wardrobe())
+        record["session"] = session
+        ok = session.get("condition_flags") == [] and session.get("outfit_suggestion") is not None
+        record["note"] = (
+            f"condition_flags={session.get('condition_flags')!r}, "
+            f"outfit_suggestion ran={session.get('outfit_suggestion') is not None}: "
+            + ("PASS" if ok else "FAIL")
+        )
+    except Exception as exc:  # noqa: BLE001 — a crash here is exactly what criterion 9 checks for
+        record["crashed"] = f"{type(exc).__name__}: {exc}"
+        record["traceback"] = traceback.format_exc()
+
+    if use_trace:
+        record["trace"] = trace_module.get_trace()
+
+    return record
+
+
+def _check_log_record(use_trace):
+    """Criterion 10 — every run leaves exactly one log record, success or
+    failure. Runs one success, one natural failure (empty search), and one
+    forced ModelUnavailable, then checks logs/run_log.jsonl grew by exactly
+    three records with the right outcome field on each."""
+    import unittest.mock as mock
+    import agent as agent_module
+    import instrumentation
+    from generate import ModelUnavailable
+    from utils.data_loader import get_example_wardrobe
+    import trace as trace_module
+
+    if use_trace:
+        trace_module.start_trace()
+
+    wardrobe = get_example_wardrobe()
+    before = len(instrumentation.read_log())
+
+    expect_error = []
+    s = agent_module.run_agent("vintage graphic tee under $30", wardrobe)
+    expect_error.append(bool(s.get("error")))
+
+    s = agent_module.run_agent("designer ballgown size XXS under $5", wardrobe)
+    expect_error.append(bool(s.get("error")))
+
+    with mock.patch.object(agent_module, "suggest_outfit", side_effect=ModelUnavailable("forced for criterion 10")):
+        s = agent_module.run_agent("denim jacket under $50", wardrobe)
+    expect_error.append(bool(s.get("error")))
+
+    after_records = instrumentation.read_log()
+    new_records = after_records[before:]
+    grew_correctly = len(new_records) == len(expect_error)
+    outcomes_match = grew_correctly and all(
+        (rec["outcome"] == "error") == expected
+        for rec, expected in zip(new_records, expect_error)
+    )
+    ok = grew_correctly and outcomes_match
+
+    record = {
+        "error": None,
+        "session": None,
+        "trace": trace_module.get_trace() if use_trace else "",
+        "crashed": None,
+        "note": (
+            f"log grew by {len(new_records)} (expected {len(expect_error)}), "
+            f"outcome fields correct: {outcomes_match} — " + ("PASS" if ok else "FAIL")
+        ),
+    }
     return record
 
 
@@ -90,8 +189,11 @@ def main():
 
     rows = []
     for scenario in scenario_module.SCENARIOS:
-        print(f"{scenario['name']}  ({scenario['wardrobe']} wardrobe)")
-        print(f"  query: {scenario['query']}")
+        if scenario.get("direct_check"):
+            print(f"{scenario['name']}  (direct check: {scenario['direct_check']})")
+        else:
+            print(f"{scenario['name']}  ({scenario['wardrobe']} wardrobe)")
+            print(f"  query: {scenario['query']}")
 
         tries = []
         for attempt in range(1, args.tries + 1):
@@ -100,6 +202,8 @@ def main():
 
             if record["crashed"]:
                 print(f"  try {attempt}: CRASHED — {record['crashed']}")
+            elif record.get("note"):
+                print(f"  try {attempt}: {record['note']}")
             else:
                 session = record["session"] or {}
                 if session.get("error"):
@@ -172,9 +276,13 @@ def write_report(rows, args):
 
     for row in rows:
         scenario = row["scenario"]
-        lines += [f"### {scenario['name']}", "",
-                  f"- Query: `{scenario['query']}`",
-                  f"- Wardrobe: {scenario['wardrobe']}", ""]
+        if scenario.get("direct_check"):
+            lines += [f"### {scenario['name']}", "",
+                      f"- Direct check: `{scenario['direct_check']}`", ""]
+        else:
+            lines += [f"### {scenario['name']}", "",
+                      f"- Query: `{scenario['query']}`",
+                      f"- Wardrobe: {scenario['wardrobe']}", ""]
 
         for i, record in enumerate(row["tries"], 1):
             lines.append(f"**Try {i}**")
@@ -183,6 +291,9 @@ def write_report(rows, args):
             if record["crashed"]:
                 lines += ["Crashed:", "", "```", record["crashed"], "```", ""]
                 continue
+
+            if record.get("note"):
+                lines += ["Note:", "", "```", record["note"], "```", ""]
 
             session = record["session"] or {}
             item = session.get("selected_item") or {}
