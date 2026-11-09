@@ -1,17 +1,20 @@
 """
-The three FitFindr tools.
+The FitFindr tools.
 
 Each one is a standalone function you can call and test on its own, before any
-of them are wired into the loop. Build and test them one at a time — three
-untested tools joined by a loop is one problem that looks like six, because you
+of them are wired into the loop. Build and test them one at a time — untested
+tools joined by a loop is one problem that looks like several, because you
 can't tell which layer is lying to you.
 
     search_listings(description, size, max_price)  → list[dict]
     suggest_outfit(new_item, wardrobe)             → str
     create_fit_card(outfit, new_item)              → str
+    flag_condition_issues(listing)                 → list[dict]
 
-All three are stubs right now. They run and they do nothing — that's the
-starting position and it's deliberate.
+The first three are stubs right now. They run and they do nothing — that's
+the starting position and it's deliberate. `flag_condition_issues` is a unit
+5 addition: a fourth tool, no model call, that checks a listing's own
+description against its condition claim.
 
 ⚠️ Before you write any of them, fill in the **Tool Inventory** section of your
 README (Milestone 2). Four lines per tool: what it does, each input with its
@@ -244,3 +247,59 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
         "read like a real post, not a product listing, and be specific about the vibe."
     )
     return generate(prompt, system=system)
+
+
+# ── Tool 4: flag_condition_issues ─────────────────────────────────────────────
+
+# Words in a description that flag a condition issue, with a severity. Checked
+# as whole word tokens, not substrings, so "pull" doesn't match "pullover" the
+# way a plain `in` check would — the same mistake the size filter warns about.
+_CONDITION_WORDS = {
+    "rip": "major", "rips": "major", "ripped": "major",
+    "tear": "major", "tears": "major", "torn": "major",
+    "stain": "major", "stains": "major", "stained": "major",
+    "hole": "major", "holes": "major",
+    "pilling": "minor", "pill": "minor", "pills": "minor",
+    "fading": "minor", "faded": "minor",
+    "pull": "minor", "pulls": "minor",
+    "discoloration": "minor", "discolored": "minor",
+    "worn": "minor",
+}
+
+
+def flag_condition_issues(listing: dict) -> list[dict]:
+    """
+    Scan a listing's description for condition-reducing language, independent
+    of whatever the listing's own `condition` field claims.
+
+    Doesn't call the model and doesn't load other listings — a pure text check
+    on the one listing you pass in, which makes it as cheap to test as
+    `search_listings`.
+
+    Args:
+        listing: a listing dict (e.g. one returned by search_listings) with a
+                  `description` key.
+
+    Returns:
+        A list of flag dicts, each `{"flag": str, "severity": "major" or
+        "minor"}`, one per distinct issue word found in the description.
+        **Returns an empty list when nothing matches — an empty list, never
+        None and never an exception.**
+
+    Matching is whole-word and case-insensitive: "a small pull in the fabric"
+    flags "pull", but "pullover" does not. It does not understand negation —
+    "no rips or stains" still flags "rip" and "stain". That's a known
+    limitation, not a bug: catching the word is cheap, and reliably parsing
+    negation is a different, harder tool.
+
+    Test it from a terminal:
+        python -c "from tools import flag_condition_issues; print(flag_condition_issues({'description': 'Some light fading at the knees.'}))"
+    """
+    text = (listing.get("description") or "").lower()
+    words = set(re.findall(r"[a-z0-9']+", text))
+
+    flags = []
+    for word, severity in _CONDITION_WORDS.items():
+        if word in words:
+            flags.append({"flag": word, "severity": severity})
+    return flags
