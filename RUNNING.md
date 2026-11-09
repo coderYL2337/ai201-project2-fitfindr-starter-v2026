@@ -4,15 +4,10 @@ Everything about how the starter works and how to use it.
 
 ---
 
-## Before your first class
+## Clone and run it locally
 
-Setup happens **before class**. The [environment setup page](../pages/ide_setup)
-has the per-operating-system commands and the exact versions.
-
-**Same API key you set up in unit 1.** Nothing new to sign up for. There is one
-new package — the MCP SDK, for unit 4 — and it installs with everything else.
-
-From inside this repo after you've forked and cloned it:
+See the README for the repository URL and the `git clone` command. From
+inside the cloned repo:
 
 **macOS / Linux**
 
@@ -20,7 +15,7 @@ From inside this repo after you've forked and cloned it:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env          # then paste your key into .env
+cp .env.example .env          # then paste your own GEMINI_API_KEY into .env
 python test.py
 ```
 
@@ -30,9 +25,39 @@ python test.py
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-copy .env.example .env         # then paste your key into .env
+copy .env.example .env         # then paste your own GEMINI_API_KEY into .env
 python test.py
 ```
+
+**Start command**, once `python test.py` passes:
+
+```bash
+python app.py ask 'vintage graphic tee under $30'
+```
+
+**What the environment needs:**
+
+- Python 3.11 up to, but not including, 3.14 — the pinned stack doesn't
+  support 3.14 yet (`test.py` checks this for you)
+- The exact packages pinned in `requirements.txt` — `pip install -r
+  requirements.txt` above installs them
+- Your own `GEMINI_API_KEY` in a local `.env` file (copied from
+  `.env.example`) — `.env` is gitignored, so every clone needs its own key,
+  it is never part of the repository
+
+---
+
+## Before your first class
+
+Setup happens **before class**. The [environment setup page](../pages/ide_setup)
+has the per-operating-system commands and the exact versions.
+
+**Same API key you set up in unit 1.** Nothing new to sign up for. There is one
+new package — the MCP SDK, for unit 4 — and it installs with everything else.
+
+You've already forked and cloned this repo, so skip the `git clone`/`cd` lines
+and just run the venv/`pip install`/`.env`/`test.py` steps from **Clone and run
+it locally** above.
 
 **You're ready when `python test.py` passes.**
 

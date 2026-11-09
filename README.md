@@ -1,5 +1,12 @@
 # FitFindr
 
+Repository: https://github.com/coderYL2337/ai201-project2-fitfindr-starter-v2026.git
+
+```bash
+git clone https://github.com/coderYL2337/ai201-project2-fitfindr-starter-v2026.git
+cd ai201-project2-fitfindr-starter-v2026
+```
+
 > ### 👋 Start here
 >
 > **New to this repo? Read [RUNNING.md](RUNNING.md) first** — setup, every
