@@ -560,12 +560,87 @@ Read [RUNNING.md](RUNNING.md)
 
 <!-- What each log record holds, and at least ten entries pasted as text. -->
 
+Every call to `agent.run_agent()` appends one JSON record to `logs/run_log.jsonl`
+via `instrumentation.py`. A `try/except/finally` wraps the whole run, so a
+record is written whether the run finishes, stops at a branch, or raises —
+the `finally` runs either way. Each record holds:
+
+| Field | What it is |
+|---|---|
+| `timestamp` | UTC, ISO 8601 |
+| `query` | what the user asked for |
+| `outcome` | `"ok"` or `"error"` |
+| `error` | `session["error"]`, or `None` |
+| `duration_seconds` | wall-clock time for the whole `run_agent()` call |
+| `search_result_count` | `len(session["search_results"])` |
+| `selected_item_id` | the id of `session["selected_item"]`, or `None` |
+| `condition_flags` | what `flag_condition_issues` returned for that item |
+| `model_calls` | calls to `generate()` made during this run |
+| `cache_hits` | of those, how many were served from cache |
+| `tokens_total` | prompt + output tokens actually billed this run |
+
+**Ten real entries, pasted as text** (two matching queries served from a
+fresh model call, five served from cache, two that stop on the empty-search
+branch, and one from a forced `ModelUnavailable`):
+
+```
+{"timestamp": "2026-11-09T06:29:48+00:00", "query": "vintage graphic tee under $30", "outcome": "ok", "error": null, "duration_seconds": 2.557, "search_result_count": 10, "selected_item_id": "lst_002", "condition_flags": [], "model_calls": 2, "cache_hits": 0, "tokens_total": 648}
+{"timestamp": "2026-11-09T06:29:51+00:00", "query": "vintage graphic tee under $30", "outcome": "ok", "error": null, "duration_seconds": 3.01, "search_result_count": 10, "selected_item_id": "lst_002", "condition_flags": [], "model_calls": 2, "cache_hits": 0, "tokens_total": 679}
+{"timestamp": "2026-11-09T06:30:19+00:00", "query": "90s track jacket in size M", "outcome": "ok", "error": null, "duration_seconds": 1.533, "search_result_count": 4, "selected_item_id": "lst_004", "condition_flags": [], "model_calls": 0, "cache_hits": 2, "tokens_total": 0}
+{"timestamp": "2026-11-09T06:30:19+00:00", "query": "silk slip dress in midi length under $40", "outcome": "ok", "error": null, "duration_seconds": 0.911, "search_result_count": 5, "selected_item_id": "lst_013", "condition_flags": [{"flag": "worn", "severity": "minor"}], "model_calls": 0, "cache_hits": 2, "tokens_total": 0}
+{"timestamp": "2026-11-09T06:30:20+00:00", "query": "designer ballgown size XXS under $5", "outcome": "error", "error": "No listings matched. Try a higher price ceiling, a different size, or fewer keywords in the description.", "duration_seconds": 0.885, "search_result_count": 0, "selected_item_id": null, "condition_flags": [], "model_calls": 0, "cache_hits": 0, "tokens_total": 0}
+{"timestamp": "2026-11-09T06:30:21+00:00", "query": "denim jacket under $50", "outcome": "ok", "error": null, "duration_seconds": 0.886, "search_result_count": 7, "selected_item_id": "lst_007", "condition_flags": [], "model_calls": 0, "cache_hits": 2, "tokens_total": 0}
+{"timestamp": "2026-11-09T06:30:22+00:00", "query": "corduroy pants under $25", "outcome": "error", "error": "No listings matched. Try a higher price ceiling, a different size, or fewer keywords in the description.", "duration_seconds": 0.844, "search_result_count": 0, "selected_item_id": null, "condition_flags": [], "model_calls": 0, "cache_hits": 0, "tokens_total": 0}
+{"timestamp": "2026-11-09T06:30:23+00:00", "query": "leather bomber jacket", "outcome": "ok", "error": null, "duration_seconds": 0.853, "search_result_count": 7, "selected_item_id": "lst_022", "condition_flags": [], "model_calls": 0, "cache_hits": 2, "tokens_total": 0}
+{"timestamp": "2026-11-09T06:30:24+00:00", "query": "platform sneakers size 8", "outcome": "ok", "error": null, "duration_seconds": 0.846, "search_result_count": 1, "selected_item_id": "lst_019", "condition_flags": [], "model_calls": 0, "cache_hits": 2, "tokens_total": 0}
+{"timestamp": "2026-11-09T06:30:26+00:00", "query": "platform sneakers size 8", "outcome": "error", "error": "The model couldn't be reached: simulated 503 for the log demo", "duration_seconds": 1.437, "search_result_count": 1, "selected_item_id": "lst_019", "condition_flags": [], "model_calls": 0, "cache_hits": 0, "tokens_total": 0}
+```
+
+The full eighteen-entry file this unit's runs produced is committed at
+`logs/run_log.jsonl`. The `ModelUnavailable` entry above was produced by
+mocking `agent.suggest_outfit` to raise it on purpose, the same technique
+used in unit 4 — it confirms the `finally` block in `run_agent` logs a
+failure even when the exception propagates out of `_run_loop`.
+
 ---
 
 ## What It Costs
 
 <!-- Your measured per-run cost, how you measured it, and the hundred-a-day
      arithmetic. -->
+
+**How I measured it:** `generate.py` already counts real tokens billed per
+call (`token_counts()`), not an estimate off a pricing page. With the cache
+forced off (`AI201_CACHE=0`, since a cache hit costs nothing and would make
+the average meaningless), I called `run_agent()` directly ten times on the
+same matching query — `'vintage graphic tee under $30'` — and read
+`duration_seconds` and `tokens_total` back out of the structured log for
+those ten runs.
+
+```
+tokens_total per run: 654, 674, 659, 615, 650, 644, 631, 648, 648, 679
+duration_seconds:     4.18, 2.87, 2.48, 2.44, 2.76, 2.25, 2.46, 44.03, 2.56, 3.01
+```
+
+**Measured per-run cost:** ~650 tokens (prompt + output combined) and 2
+model calls, every run — `suggest_outfit` and `create_fit_card` each call the
+model once; `search_listings` doesn't. Average duration was 6.90s including
+all ten runs, but one run (44.03s) crossed the 15-requests-per-minute pacing
+window in `generate.py` and waited on it — that's the limiter doing its job,
+not the cost of the work itself. Excluding that one outlier, the other nine
+runs averaged **2.78 seconds** of real wall-clock time per run.
+
+**The hundred-a-day arithmetic:** at 100 runs/day, this system does:
+
+- **~65,000 tokens/day** (100 × ~650)
+- **200 model calls/day** (100 × 2) — at the free tier's 15-requests/minute
+  pacing limit, 200 calls run back-to-back with no gaps between users would
+  take roughly 13-14 minutes of pure pacing, not 200 minutes — a non-issue
+  spread across a day, but the number that starts to matter if "a hundred a
+  day" became "a hundred an hour"
+- **~278 seconds (~4.6 minutes) of compute/day** (100 × 2.78s), which matters
+  specifically because `serve.py` answers one request at a time — that's
+  4.6 minutes the single worker would be busy out of 1,440 minutes in a day
 
 ---
 

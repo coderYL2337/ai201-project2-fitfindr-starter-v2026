@@ -189,6 +189,7 @@ the point of the session.
 | `agent.py` | The planning loop and the session. **Stub — you build this** |
 | `generate.py` | The only thing that calls out to a service. Handles pacing and quota |
 | `trace.py` | The trace helper, and the loop's stop condition |
+| `instrumentation.py` | Structured, per-run logging — **unit 5** |
 | `app.py` | The command line |
 | `serve.py` | The same agent over HTTP, for deploying — **unit 9** |
 | `mcp_server.py` | Your MCP server — **unit 4, you register the tool** |
@@ -199,6 +200,7 @@ the point of the session.
 | `data/` | 40 listings and the wardrobe schema |
 | `utils/data_loader.py` | Loading the data. Use this rather than reading the files yourself |
 | `results/` | Run logs. **Commit these** — they're your evidence |
+| `logs/run_log.jsonl` | One JSON record per `run_agent()` call, success or failure — **unit 5, commit this** |
 
 ---
 
